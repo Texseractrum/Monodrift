@@ -42,19 +42,6 @@
             font-size: 18px;
             text-align: left;
         }
-        #debug {
-            position: absolute;
-            bottom: 10px;
-            left: 10px;
-            font-size: 12px;
-            opacity: 0.7;
-            z-index: 100;
-            max-width: 400px;
-            max-height: 200px;
-            overflow-y: auto;
-            background-color: rgba(0, 0, 0, 0.5);
-            padding: 5px;
-        }
     </style>
 </head>
 <body>
@@ -67,35 +54,15 @@
         <div id="controls">
             <p>Controls:</p>
             <ul>
-                <li>Arrow Up/Down: Accelerate/Brake</li>
+                <li>Arrow Up/Down or WASD: Accelerate/Brake</li>
                 <li>Arrow Left/Right: Steer</li>
                 <li>SPACE: Drift (hold while turning)</li>
-                <li>O: Toggle Orbit Controls</li>
+                <li>SHIFT: Nitro Boost</li>
+                <li>R: Restart</li>
             </ul>
         </div>
         <p>Click to start</p>
     </div>
-    <div id="debug"></div>
-    <script type="module" src="/src/main.js"></script>
-    <script>
-    // Debug console logging
-    const originalConsoleLog = console.log;
-    const originalConsoleError = console.error;
-    const debugDiv = document.getElementById('debug');
-    
-    console.log = function() {
-        originalConsoleLog.apply(console, arguments);
-        const message = Array.from(arguments).join(' ');
-        debugDiv.innerHTML += `<div>${message}</div>`;
-        debugDiv.scrollTop = debugDiv.scrollHeight;
-    };
-    
-    console.error = function() {
-        originalConsoleError.apply(console, arguments);
-        const message = Array.from(arguments).join(' ');
-        debugDiv.innerHTML += `<div style="color: red">${message}</div>`;
-        debugDiv.scrollTop = debugDiv.scrollHeight;
-    };
-    </script>
+    <script type="module" src="./src/main.js"></script>
 </body>
 </html> 

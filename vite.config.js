@@ -1,11 +1,20 @@
-export default {
+import { defineConfig } from 'vite';
+
+export default defineConfig({
   server: {
-    open: true
+    port: 3000
   },
   build: {
     outDir: 'dist',
-    assetsDir: 'assets',
     minify: 'terser',
+    assetsDir: 'assets',
+    sourcemap: false,
+    // Ensure everything is properly bundled
+    rollupOptions: {
+      output: {
+        manualChunks: undefined
+      }
+    }
   },
-  base: './'
-} 
+  base: '/'
+}); 
