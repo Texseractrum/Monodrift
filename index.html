@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monodrift</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #000;
+            color: #fff;
+            font-family: 'Courier New', monospace;
+        }
+        canvas {
+            display: block;
+        }
+        #ui {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 100;
+        }
+        #score {
+            font-size: 24px;
+        }
+        #instructions {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            font-size: 24px;
+            opacity: 0.9;
+            background-color: rgba(0, 0, 0, 0.5);
+            padding: 20px;
+            border-radius: 10px;
+            max-width: 500px;
+        }
+        #controls {
+            margin-top: 20px;
+            font-size: 18px;
+            text-align: left;
+        }
+        #debug {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            font-size: 12px;
+            opacity: 0.7;
+            z-index: 100;
+            max-width: 400px;
+            max-height: 200px;
+            overflow-y: auto;
+            background-color: rgba(0, 0, 0, 0.5);
+            padding: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div id="ui">
+        <div id="score">Score: 0</div>
+    </div>
+    <div id="instructions">
+        <h2>MONODRIFT</h2>
+        <p>A minimalist drifting experience with your custom car model</p>
+        <div id="controls">
+            <p>Controls:</p>
+            <ul>
+                <li>Arrow Up/Down: Accelerate/Brake</li>
+                <li>Arrow Left/Right: Steer</li>
+                <li>SPACE: Drift (hold while turning)</li>
+                <li>O: Toggle Orbit Controls</li>
+            </ul>
+        </div>
+        <p>Click to start</p>
+    </div>
+    <div id="debug"></div>
+    <script type="module" src="/src/main.js"></script>
+    <script>
+    // Debug console logging
+    const originalConsoleLog = console.log;
+    const originalConsoleError = console.error;
+    const debugDiv = document.getElementById('debug');
+    
+    console.log = function() {
+        originalConsoleLog.apply(console, arguments);
+        const message = Array.from(arguments).join(' ');
+        debugDiv.innerHTML += `<div>${message}</div>`;
+        debugDiv.scrollTop = debugDiv.scrollHeight;
+    };
+    
+    console.error = function() {
+        originalConsoleError.apply(console, arguments);
+        const message = Array.from(arguments).join(' ');
+        debugDiv.innerHTML += `<div style="color: red">${message}</div>`;
+        debugDiv.scrollTop = debugDiv.scrollHeight;
+    };
+    </script>
+</body>
+</html> 

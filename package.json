@@ -1,0 +1,17 @@
+{
+  "name": "monodrift",
+  "version": "0.1.0",
+  "description": "A minimal black and white drifting game",
+  "main": "index.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "three": "^0.160.0"
+  },
+  "devDependencies": {
+    "vite": "^5.0.0"
+  }
+} 
