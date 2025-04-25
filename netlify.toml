@@ -5,6 +5,17 @@
 [build.environment]
   NODE_VERSION = "18"
 
+# Ensure GLB files are treated as binary and not processed
+[[headers]]
+  for = "*.glb"
+  [headers.values]
+    Content-Type = "model/gltf-binary"
+    Content-Disposition = "inline"
+
+# Don't process binary files
+[build.processing]
+  skip_processing = true
+
 [[redirects]]
   from = "/*"
   to = "/index.html"

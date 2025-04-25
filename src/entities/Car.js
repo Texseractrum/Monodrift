@@ -174,8 +174,8 @@ export class Car {
         
         // Load the model
         loader.load(
-            // Path to your model file
-            '/models/car.glb',
+            // Path to your model file - use relative path for Netlify compatibility
+            './models/car.glb',
             
             // Called when the model is loaded
             (gltf) => {

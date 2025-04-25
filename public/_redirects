@@ -1,0 +1,5 @@
+# Ensure all routes go to index.html for SPA
+/* /index.html 200
+
+# Explicitly handle GLB files
+/models/* /models/:splat 200 
