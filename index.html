@@ -2,7 +2,10 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Monodrift</title>
     <style>
         body {
@@ -11,9 +14,11 @@
             background-color: #000;
             color: #fff;
             font-family: 'Courier New', monospace;
+            touch-action: none;
         }
         canvas {
             display: block;
+            touch-action: none;
         }
         #ui {
             position: absolute;
@@ -42,6 +47,16 @@
             font-size: 18px;
             text-align: left;
         }
+        @media (max-width: 768px) {
+            #instructions {
+                font-size: 18px;
+                max-width: 90%;
+                padding: 15px;
+            }
+            #controls {
+                font-size: 14px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -60,8 +75,9 @@
                 <li>SHIFT: Nitro Boost</li>
                 <li>R: Restart</li>
             </ul>
+            <p class="mobile-notice">Mobile controls will appear automatically on touch devices</p>
         </div>
-        <p>Click to start</p>
+        <p>Click/tap to start</p>
     </div>
     <script type="module" src="./src/main.js"></script>
 </body>
