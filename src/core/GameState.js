@@ -8,6 +8,16 @@ export class GameState {
         this.driftChainTimeout = 1.5; // seconds before drift chain resets
         this.gameOver = false;
         this.isFirstGame = true;
+        
+        // Timer properties
+        this.gameTimeLimit = 30; // 30 second game (was 60)
+        this.timeRemaining = this.gameTimeLimit;
+        this.isTimerRunning = false;
+        
+        // Create custom event for score updates
+        this.scoreUpdateEvent = new CustomEvent('scoreUpdate', {
+            detail: { score: this.score, multiplier: this.driftMultiplier }
+        });
     }
     
     resetScore() {
@@ -16,20 +26,79 @@ export class GameState {
         this.driftChainTimer = 0;
         this.gameOver = false;
         this.isFirstGame = false;
+        
+        // Reset timer but don't start it yet
+        this.timeRemaining = this.gameTimeLimit;
+        this.isTimerRunning = false;
+        
+        // Notify score update
+        this.notifyScoreUpdate();
     }
     
     addScore(points) {
-        // Apply drift multiplier to points
-        this.score += points * this.driftMultiplier;
-        
-        // Update high score if needed
-        if (this.score > this.highScore) {
-            this.highScore = this.score;
-            this.saveHighScore();
+        // Only add score if the timer is still running
+        if (this.isTimerRunning) {
+            // Apply drift multiplier to points
+            this.score += points * this.driftMultiplier;
+            
+            // Update high score if needed
+            if (this.score > this.highScore) {
+                this.highScore = this.score;
+                this.saveHighScore();
+            }
+            
+            // Notify score update
+            this.notifyScoreUpdate();
         }
     }
     
+    // Method to notify score updates via custom event
+    notifyScoreUpdate() {
+        // Update event data
+        this.scoreUpdateEvent.detail.score = this.score;
+        this.scoreUpdateEvent.detail.multiplier = this.driftMultiplier;
+        
+        // Dispatch the event
+        document.dispatchEvent(new CustomEvent('scoreUpdate', {
+            detail: { 
+                score: this.score, 
+                multiplier: this.driftMultiplier 
+            }
+        }));
+    }
+    
+    updateTimer(deltaTime) {
+        if (this.isTimerRunning) {
+            this.timeRemaining -= deltaTime;
+            
+            // Check if time is up
+            if (this.timeRemaining <= 0) {
+                this.timeRemaining = 0;
+                this.isTimerRunning = false;
+                this.setGameOver();
+                
+                // Dispatch event for game over
+                const gameOverEvent = new CustomEvent('gameOver', {
+                    detail: { 
+                        finalScore: this.score,
+                        highScore: this.highScore
+                    }
+                });
+                document.dispatchEvent(gameOverEvent);
+            }
+        }
+    }
+    
+    getFormattedTime() {
+        const minutes = Math.floor(this.timeRemaining / 60);
+        const seconds = Math.floor(this.timeRemaining % 60);
+        return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    }
+    
     updateDriftMultiplier(isDrifting, deltaTime) {
+        let multiplierChanged = false;
+        const oldMultiplier = this.driftMultiplier;
+        
         if (isDrifting) {
             // Reset chain timer while drifting
             this.driftChainTimer = 0;
@@ -39,14 +108,26 @@ export class GameState {
                 this.driftMultiplier + deltaTime * 0.5,
                 this.maxDriftMultiplier
             );
+            
+            if (this.driftMultiplier !== oldMultiplier) {
+                multiplierChanged = true;
+            }
         } else {
             // Count down chain timer when not drifting
             this.driftChainTimer += deltaTime;
             
             // Reset multiplier if chain times out
             if (this.driftChainTimer >= this.driftChainTimeout) {
-                this.driftMultiplier = 1;
+                if (this.driftMultiplier > 1) {
+                    this.driftMultiplier = 1;
+                    multiplierChanged = true;
+                }
             }
+        }
+        
+        // Notify multiplier change
+        if (multiplierChanged) {
+            this.notifyScoreUpdate();
         }
     }
     
@@ -61,5 +142,11 @@ export class GameState {
     
     setGameOver() {
         this.gameOver = true;
+    }
+    
+    // Add a method to start the timer
+    startTimer() {
+        this.isTimerRunning = true;
+        console.log("Timer started, game begins!");
     }
 } 

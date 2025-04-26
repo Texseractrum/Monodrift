@@ -5,6 +5,9 @@ import { City } from './entities/City.js';
 import { InputHandler } from './core/InputHandler.js';
 import { Physics } from './core/Physics.js';
 import { GameState } from './core/GameState.js';
+import { LeaderboardService } from './services/LeaderboardService.js';
+import { LeaderboardUI } from './ui/LeaderboardUI.js';
+import config from './config.js';
 
 class Game {
     constructor() {
@@ -20,6 +23,18 @@ class Game {
         this.inputHandler = new InputHandler();
         this.physics = new Physics();
         
+        // Create leaderboard service and UI immediately
+        this.leaderboardService = new LeaderboardService();
+        this.leaderboardUI = new LeaderboardUI(this.leaderboardService);
+        
+        // Initialize the leaderboard service asynchronously
+        // This will handle fetching data with retries.
+        // The UI will update via the callback when data arrives.
+        this.leaderboardService.initialize().catch(error => {
+            console.error("Leaderboard initialization failed:", error);
+            // UI will show loading/error state based on the callback
+        });
+        
         this.setupLighting();
         this.setupModernUI();
         
@@ -30,9 +45,14 @@ class Game {
         
         // Set the camera reference for the car
         this.car.camera = this.camera;
+        // Set GameState reference for score updates
+        this.car.gameState = this.gameState;
         
         this.lastTime = 0;
         this.isRunning = false;
+        
+        // Player name
+        this.playerName = "";
         
         // Camera movement smoothing
         this.targetCameraPosition = new THREE.Vector3();
@@ -62,8 +82,8 @@ class Game {
         // Start with camera positioned behind the car
         this.updateCameraPosition(true);
         
-        // Start the game automatically
-        setTimeout(() => this.startGame(), 1000);
+        // Show player name prompt instead of auto-starting
+        setTimeout(() => this.showPlayerNamePrompt(), 1000);
     }
     
     setupCamera() {
@@ -190,8 +210,41 @@ class Game {
         scoreElement.style.textShadow = '0 0 5px rgba(255, 255, 255, 0.5)';
         scoreElement.textContent = 'SCORE: 0';
         
+        // Create timer element
+        const timerElement = document.createElement('div');
+        timerElement.id = 'timer';
+        timerElement.style.color = '#fff';
+        timerElement.style.fontSize = '24px';
+        timerElement.style.fontWeight = 'bold';
+        timerElement.style.textShadow = '0 0 5px rgba(255, 255, 255, 0.5)';
+        timerElement.style.marginLeft = '20px';
+        timerElement.textContent = 'TIME: 1:00';
+        
         scoreContainer.appendChild(scoreElement);
+        scoreContainer.appendChild(timerElement);
         topHUD.appendChild(scoreContainer);
+        
+        // Add leaderboard button
+        const leaderboardButton = document.createElement('div');
+        leaderboardButton.id = 'leaderboard-button';
+        leaderboardButton.textContent = 'LEADERBOARD';
+        leaderboardButton.style.position = 'absolute';
+        leaderboardButton.style.top = '20px';
+        leaderboardButton.style.right = '20px';
+        leaderboardButton.style.background = 'rgba(0, 0, 0, 0.6)';
+        leaderboardButton.style.color = '#fff';
+        leaderboardButton.style.padding = '10px 15px';
+        leaderboardButton.style.borderRadius = '5px';
+        leaderboardButton.style.cursor = 'pointer';
+        leaderboardButton.style.pointerEvents = 'all';
+        leaderboardButton.style.fontWeight = 'bold';
+        leaderboardButton.style.fontSize = '14px';
+        leaderboardButton.style.letterSpacing = '1px';
+        leaderboardButton.style.textTransform = 'uppercase';
+        leaderboardButton.style.boxShadow = '0 0 10px rgba(0, 0, 0, 0.3)';
+        leaderboardButton.addEventListener('click', () => {
+            this.leaderboardUI.toggle();
+        });
         
         // Create the bottom HUD for nitro
         const bottomHUD = document.createElement('div');
@@ -376,6 +429,107 @@ class Game {
                     this.updateCameraPosition(true);
                 }
             }
+            
+            // Toggle leaderboard with 'L' key
+            if (e.code === 'KeyL') {
+                this.leaderboardUI.toggle();
+            }
+        });
+        
+        // Add drift score event listener
+        document.addEventListener('driftScore', async (event) => {
+            const { points, total } = event.detail;
+            
+            // No need to check for leaderboard qualification since we'll auto-submit at the end
+        });
+        
+        // Listen for the custom toggleLeaderboard event from mobile controls
+        document.addEventListener('toggleLeaderboard', () => {
+            this.leaderboardUI.toggle();
+        });
+        
+        // Add game over event listener
+        document.addEventListener('gameOver', (event) => {
+            const { finalScore, highScore } = event.detail;
+            
+            // Show game over message
+            this.showGameOverMessage(finalScore, highScore);
+            
+            // Automatically submit score to leaderboard
+            if (this.playerName && finalScore > 0) {
+                console.log(`Auto-submitting score: ${finalScore} for player: ${this.playerName}`);
+                this.leaderboardService.submitScore(this.playerName, finalScore)
+                    .then(success => {
+                        if (success) {
+                            console.log("Score submitted successfully");
+                            
+                            // Show leaderboard after a short delay
+                            setTimeout(() => {
+                                this.leaderboardUI.show();
+                            }, 2000);
+                        } else {
+                            console.error("Failed to submit score");
+                        }
+                    });
+            }
+        });
+        
+        // Listen for score updates
+        document.addEventListener('scoreUpdate', (event) => {
+            const { score, multiplier } = event.detail;
+            
+            // Update score display
+            const scoreElement = document.getElementById('score');
+            if (scoreElement) {
+                // For smoother experience, don't show temporary scores below current displayed value
+                const currentDisplayed = parseInt(scoreElement.textContent.replace('SCORE: ', '')) || 0;
+                if (score > currentDisplayed) {
+                    scoreElement.textContent = `SCORE: ${Math.floor(score)}`;
+                    
+                    // Add brief animation effect
+                    scoreElement.style.transform = 'scale(1.1)';
+                    scoreElement.style.color = '#ffcc00';
+                    
+                    setTimeout(() => {
+                        scoreElement.style.transform = 'scale(1)';
+                        scoreElement.style.color = '#fff';
+                    }, 150);
+                }
+            }
+            
+            // Show multiplier if greater than 1
+            if (multiplier > 1) {
+                const multiplierText = document.getElementById('multiplier');
+                
+                if (!multiplierText) {
+                    // Create multiplier element if it doesn't exist
+                    const newMultiplier = document.createElement('div');
+                    newMultiplier.id = 'multiplier';
+                    newMultiplier.style.color = '#ffcc00';
+                    newMultiplier.style.fontSize = '18px';
+                    newMultiplier.style.fontWeight = 'bold';
+                    newMultiplier.style.textAlign = 'center';
+                    newMultiplier.style.marginTop = '5px';
+                    
+                    // Add to score container
+                    const scoreContainer = document.getElementById('score-container');
+                    if (scoreContainer) {
+                        scoreContainer.appendChild(newMultiplier);
+                    }
+                }
+                
+                const multiplierDisplay = document.getElementById('multiplier');
+                if (multiplierDisplay) {
+                    multiplierDisplay.textContent = `MULTIPLIER: x${multiplier.toFixed(1)}`;
+                    multiplierDisplay.style.display = 'block';
+                }
+            } else {
+                // Hide multiplier when it's 1
+                const multiplierDisplay = document.getElementById('multiplier');
+                if (multiplierDisplay) {
+                    multiplierDisplay.style.display = 'none';
+                }
+            }
         });
     }
     
@@ -383,6 +537,10 @@ class Game {
         this.isRunning = true;
         this.gameState.resetScore();
         document.getElementById('instructions').style.display = 'none';
+        
+        // Start the timer immediately
+        this.gameState.startTimer();
+        this.showGoMessage();
     }
     
     onWindowResize() {
@@ -557,7 +715,8 @@ class Game {
         this.lastTime = currentTime;
         
         if (this.isRunning && deltaTime < 0.2) { // Skip big jumps in time
-            // Update game state
+            // Update game state and timer
+            this.gameState.updateTimer(deltaTime);
             this.inputHandler.update();
             
             // Update car physics and movement
@@ -597,7 +756,278 @@ class Game {
             }
         }
         
-        // Update score - now handled by drift score event
+        // Update score element directly from gameState
+        const scoreElement = document.getElementById('score');
+        if (scoreElement && this.gameState) {
+            const currentScore = Math.floor(this.gameState.score);
+            
+            // Only update if score changed, and animate the change
+            if (currentScore !== this._lastDisplayedScore) {
+                scoreElement.textContent = `SCORE: ${currentScore}`;
+                
+                // Add brief animation effect for score changes
+                scoreElement.style.transform = 'scale(1.1)';
+                scoreElement.style.color = '#ffcc00';
+                
+                setTimeout(() => {
+                    scoreElement.style.transform = 'scale(1)';
+                    scoreElement.style.color = '#fff';
+                }, 150);
+                
+                this._lastDisplayedScore = currentScore;
+            }
+        }
+        
+        // Update timer element
+        const timerElement = document.getElementById('timer');
+        if (timerElement && this.gameState) {
+            if (!this.gameState.isTimerRunning) {
+                // Show "READY..." text when waiting for player to start
+                timerElement.textContent = `READY...`;
+                timerElement.style.color = '#ffcc00';
+            } else if (this.gameState.timeRemaining <= 10) {
+                // Change color to red when time is running low (less than 10 seconds)
+                timerElement.style.color = '#ff3333';
+                
+                // Add pulsing effect for urgency
+                if (Math.floor(this.gameState.timeRemaining) % 2 === 0) {
+                    timerElement.style.transform = 'scale(1.1)';
+                } else {
+                    timerElement.style.transform = 'scale(1.0)';
+                }
+                
+                timerElement.textContent = `TIME: ${this.gameState.getFormattedTime()}`;
+            } else {
+                timerElement.style.color = '#fff';
+                timerElement.style.transform = 'scale(1.0)';
+                timerElement.textContent = `TIME: ${this.gameState.getFormattedTime()}`;
+            }
+        }
+    }
+    
+    showPlayerNamePrompt() {
+        // Create modal container
+        const modalContainer = document.createElement('div');
+        modalContainer.id = 'player-name-modal';
+        modalContainer.style.position = 'absolute';
+        modalContainer.style.top = '0';
+        modalContainer.style.left = '0';
+        modalContainer.style.width = '100%';
+        modalContainer.style.height = '100%';
+        modalContainer.style.backgroundColor = 'rgba(0, 0, 0, 0.8)';
+        modalContainer.style.display = 'flex';
+        modalContainer.style.justifyContent = 'center';
+        modalContainer.style.alignItems = 'center';
+        modalContainer.style.zIndex = '2000';
+        
+        // Create modal content
+        const modalContent = document.createElement('div');
+        modalContent.style.backgroundColor = 'rgba(0, 0, 0, 0.9)';
+        modalContent.style.borderRadius = '10px';
+        modalContent.style.padding = '30px';
+        modalContent.style.width = '80%';
+        modalContent.style.maxWidth = '500px';
+        modalContent.style.boxShadow = '0 0 20px rgba(0, 0, 0, 0.5)';
+        modalContent.style.textAlign = 'center';
+        
+        // Create title
+        const title = document.createElement('h2');
+        title.textContent = 'MONODRIFT';
+        title.style.color = '#ffcc00';
+        title.style.fontSize = '36px';
+        title.style.marginBottom = '30px';
+        title.style.textTransform = 'uppercase';
+        title.style.letterSpacing = '3px';
+        
+        // Create subtitle
+        const subtitle = document.createElement('p');
+        subtitle.textContent = 'Enter your name to start:';
+        subtitle.style.color = '#fff';
+        subtitle.style.fontSize = '18px';
+        subtitle.style.marginBottom = '20px';
+        
+        // Create input field
+        const inputContainer = document.createElement('div');
+        inputContainer.style.marginBottom = '30px';
+        inputContainer.style.display = 'flex';
+        inputContainer.style.justifyContent = 'center';
+        
+        const nameInput = document.createElement('input');
+        nameInput.type = 'text';
+        nameInput.placeholder = 'Your Name';
+        nameInput.style.padding = '10px 15px';
+        nameInput.style.fontSize = '18px';
+        nameInput.style.border = 'none';
+        nameInput.style.borderRadius = '5px 0 0 5px';
+        nameInput.style.width = '60%';
+        nameInput.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
+        nameInput.style.color = '#fff';
+        nameInput.maxLength = 15;
+        
+        // Default player name
+        nameInput.value = `Player${Math.floor(Math.random() * 1000)}`;
+        
+        const startButton = document.createElement('button');
+        startButton.textContent = 'START';
+        startButton.style.padding = '10px 20px';
+        startButton.style.fontSize = '18px';
+        startButton.style.fontWeight = 'bold';
+        startButton.style.backgroundColor = '#ffcc00';
+        startButton.style.color = '#000';
+        startButton.style.border = 'none';
+        startButton.style.borderRadius = '0 5px 5px 0';
+        startButton.style.cursor = 'pointer';
+        
+        inputContainer.appendChild(nameInput);
+        inputContainer.appendChild(startButton);
+        
+        // Create instructions
+        const instructions = document.createElement('div');
+        instructions.innerHTML = `
+            <p style="margin-bottom: 15px; color: #fff; font-size: 16px;">You have 30 seconds to rack up as many points as possible!</p>
+            <div style="color: #aaa; font-size: 14px; text-align: left; margin: 0 auto; max-width: 300px;">
+                <p style="margin-bottom: 5px;">• WASD / Arrow Keys to drive</p>
+                <p style="margin-bottom: 5px;">• SPACE to drift (hold while turning)</p>
+                <p style="margin-bottom: 5px;">• SHIFT for nitro boost</p>
+            </div>
+        `;
+        
+        // Add elements to modal
+        modalContent.appendChild(title);
+        modalContent.appendChild(subtitle);
+        modalContent.appendChild(inputContainer);
+        modalContent.appendChild(instructions);
+        modalContainer.appendChild(modalContent);
+        document.body.appendChild(modalContainer);
+        
+        // Auto focus the input field
+        nameInput.focus();
+        
+        // Event listeners for the start button and enter key
+        const startGame = () => {
+            this.playerName = nameInput.value.trim() || `Player${Math.floor(Math.random() * 1000)}`;
+            document.body.removeChild(modalContainer);
+            
+            // Show existing instructions briefly
+            const instructionsElement = document.getElementById('instructions');
+            if (instructionsElement) {
+                instructionsElement.style.display = 'block';
+                setTimeout(() => {
+                    instructionsElement.style.display = 'none';
+                    this.startGame();
+                }, 1500);
+            } else {
+                this.startGame();
+            }
+        };
+        
+        startButton.addEventListener('click', startGame);
+        nameInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                startGame();
+            }
+        });
+    }
+    
+    showGameOverMessage(finalScore, highScore) {
+        // Create game over message
+        const gameOverContainer = document.createElement('div');
+        gameOverContainer.id = 'game-over-container';
+        gameOverContainer.style.position = 'absolute';
+        gameOverContainer.style.top = '50%';
+        gameOverContainer.style.left = '50%';
+        gameOverContainer.style.transform = 'translate(-50%, -50%)';
+        gameOverContainer.style.background = 'rgba(0, 0, 0, 0.8)';
+        gameOverContainer.style.padding = '30px 50px';
+        gameOverContainer.style.borderRadius = '10px';
+        gameOverContainer.style.color = '#fff';
+        gameOverContainer.style.textAlign = 'center';
+        gameOverContainer.style.zIndex = '1000';
+        gameOverContainer.style.boxShadow = '0 0 20px rgba(0, 0, 0, 0.5)';
+        
+        // Game over title
+        const gameOverTitle = document.createElement('h2');
+        gameOverTitle.textContent = 'TIME UP!';
+        gameOverTitle.style.color = '#ffcc00';
+        gameOverTitle.style.fontSize = '36px';
+        gameOverTitle.style.margin = '0 0 20px 0';
+        
+        // Player name
+        const playerNameElement = document.createElement('div');
+        playerNameElement.textContent = `PLAYER: ${this.playerName}`;
+        playerNameElement.style.fontSize = '20px';
+        playerNameElement.style.marginBottom = '10px';
+        
+        // Final score
+        const finalScoreElement = document.createElement('div');
+        finalScoreElement.textContent = `FINAL SCORE: ${Math.floor(finalScore)}`;
+        finalScoreElement.style.fontSize = '24px';
+        finalScoreElement.style.marginBottom = '10px';
+        
+        // High score
+        const highScoreElement = document.createElement('div');
+        highScoreElement.textContent = `HIGH SCORE: ${Math.floor(highScore)}`;
+        highScoreElement.style.fontSize = '20px';
+        highScoreElement.style.marginBottom = '30px';
+        highScoreElement.style.color = '#aaa';
+        
+        // Restart button
+        const restartButton = document.createElement('button');
+        restartButton.textContent = 'RESTART';
+        restartButton.style.background = '#ffcc00';
+        restartButton.style.color = '#000';
+        restartButton.style.border = 'none';
+        restartButton.style.padding = '10px 30px';
+        restartButton.style.fontSize = '18px';
+        restartButton.style.fontWeight = 'bold';
+        restartButton.style.borderRadius = '5px';
+        restartButton.style.cursor = 'pointer';
+        restartButton.style.transition = 'background 0.2s';
+        restartButton.addEventListener('mouseover', () => restartButton.style.background = '#ffd633');
+        restartButton.addEventListener('mouseout', () => restartButton.style.background = '#ffcc00');
+        restartButton.addEventListener('click', () => {
+            document.body.removeChild(gameOverContainer);
+            this.showPlayerNamePrompt();
+        });
+        
+        // Assemble elements
+        gameOverContainer.appendChild(gameOverTitle);
+        gameOverContainer.appendChild(playerNameElement);
+        gameOverContainer.appendChild(finalScoreElement);
+        gameOverContainer.appendChild(highScoreElement);
+        gameOverContainer.appendChild(restartButton);
+        
+        // Add to the DOM
+        document.body.appendChild(gameOverContainer);
+    }
+    
+    // Add a "GO!" message when the game starts
+    showGoMessage() {
+        const goContainer = document.createElement('div');
+        goContainer.style.position = 'absolute';
+        goContainer.style.top = '50%';
+        goContainer.style.left = '50%';
+        goContainer.style.transform = 'translate(-50%, -50%)';
+        goContainer.style.color = '#ffcc00';
+        goContainer.style.fontSize = '80px';
+        goContainer.style.fontWeight = 'bold';
+        goContainer.style.textAlign = 'center';
+        goContainer.style.zIndex = '1000';
+        goContainer.style.textShadow = '0 0 20px rgba(255, 204, 0, 0.8)';
+        goContainer.style.transition = 'transform 0.5s, opacity 0.5s';
+        goContainer.textContent = 'GO!';
+        
+        document.body.appendChild(goContainer);
+        
+        // Animate and remove
+        setTimeout(() => {
+            goContainer.style.transform = 'translate(-50%, -50%) scale(2)';
+            goContainer.style.opacity = '0';
+        }, 100);
+        
+        setTimeout(() => {
+            document.body.removeChild(goContainer);
+        }, 1000);
     }
 }
 

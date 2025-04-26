@@ -189,8 +189,34 @@ export class InputHandler {
         restartButton.addEventListener('touchstart', () => this.handleButtonPress('restart', true));
         restartButton.addEventListener('touchend', () => this.handleButtonPress('restart', false));
         
+        // Add leaderboard button for mobile
+        const leaderboardButton = document.createElement('div');
+        leaderboardButton.id = 'mobile-leaderboard-button';
+        leaderboardButton.textContent = 'L';
+        leaderboardButton.style.position = 'absolute';
+        leaderboardButton.style.top = '20px';
+        leaderboardButton.style.left = '20px';
+        leaderboardButton.style.width = '50px';
+        leaderboardButton.style.height = '50px';
+        leaderboardButton.style.borderRadius = '50%';
+        leaderboardButton.style.background = 'rgba(255, 204, 0, 0.3)';
+        leaderboardButton.style.border = '2px solid rgba(255, 255, 255, 0.4)';
+        leaderboardButton.style.display = 'flex';
+        leaderboardButton.style.justifyContent = 'center';
+        leaderboardButton.style.alignItems = 'center';
+        leaderboardButton.style.fontSize = '18px';
+        leaderboardButton.style.fontWeight = 'bold';
+        leaderboardButton.style.color = '#fff';
+        leaderboardButton.style.pointerEvents = 'all';
+        
+        leaderboardButton.addEventListener('touchstart', () => {
+            // Dispatch a custom event to toggle the leaderboard
+            document.dispatchEvent(new CustomEvent('toggleLeaderboard'));
+        });
+        
         container.appendChild(buttonContainer);
         container.appendChild(restartButton);
+        container.appendChild(leaderboardButton);
     }
     
     handleJoystickStart(event) {

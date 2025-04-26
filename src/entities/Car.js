@@ -10,6 +10,9 @@ export class Car {
         // Store camera reference
         this.camera = null; // Will be set from Game.js
         
+        // GameState reference for score updates
+        this.gameState = null; // Will be set from Game.js
+        
         // Car properties - improved physics
         this.maxSpeed = 25; // Increased max speed
         this.acceleration = 15; // More responsive acceleration
@@ -415,11 +418,35 @@ export class Car {
                 
                 // Update the drift points text
                 this.updateDriftPointsText(Math.floor(this.activeDriftPoints));
+                
+                // Update GameState during drift for real-time score updates
+                if (this.gameState && Math.floor(this.driftDuration * 2) > Math.floor((this.driftDuration - deltaTime) * 2)) {
+                    // Update the temporary score in GameState
+                    const currentTotal = this.totalScore + Math.floor(this.activeDriftPoints);
+                    this.gameState.score = currentTotal;
+                    this.gameState.notifyScoreUpdate();
+                }
+                
+                // Update scoreboard every half second during drift for smoother display
+                if (Math.floor(this.driftDuration * 2) > Math.floor((this.driftDuration - deltaTime) * 2)) {
+                    document.dispatchEvent(new CustomEvent('scoreUpdate', { 
+                        detail: { 
+                            score: this.totalScore + Math.floor(this.activeDriftPoints),
+                            multiplier: this.driftPointsMultiplier
+                        } 
+                    }));
+                }
             }
         } else if (wasDrifting) {
             // Just finished drifting, add points to total score
             const finalPoints = Math.floor(this.activeDriftPoints);
             this.totalScore += finalPoints;
+            
+            // Add to GameState if available
+            if (this.gameState) {
+                this.gameState.addScore(finalPoints);
+                console.log(`Drift score added: ${finalPoints}, Total: ${this.gameState.score}`);
+            }
             
             // Recover nitro based on drift score
             this.currentNitro = Math.min(100, this.currentNitro + (finalPoints * this.nitroRecoveryFromDrift));
@@ -437,6 +464,14 @@ export class Car {
                 } 
             });
             document.dispatchEvent(driftScoreEvent);
+            
+            // Also dispatch an immediate score update for more responsive UI
+            document.dispatchEvent(new CustomEvent('scoreUpdate', { 
+                detail: { 
+                    score: this.totalScore,
+                    multiplier: 1.0 // Reset to 1 after drift
+                } 
+            }));
         }
         
         // When accelerating during a drift, always maintain forward velocity regardless of steering
@@ -523,6 +558,13 @@ export class Car {
             // Player just finished a spinout that lasted at least 0.5 seconds
             // Add bonus points for completing a spin
             const spinBonus = Math.floor(this.spinScore * 2.5);
+            
+            // Add to GameState if available
+            if (this.gameState) {
+                this.gameState.addScore(spinBonus);
+                console.log(`Spin score added: ${spinBonus}, Total: ${this.gameState.score}`);
+            }
+            
             // Dispatch a custom event for scoring
             const spinEvent = new CustomEvent('spinout', { 
                 detail: { 
@@ -532,6 +574,15 @@ export class Car {
                 } 
             });
             document.dispatchEvent(spinEvent);
+            
+            // Update total score and dispatch score update
+            this.totalScore += spinBonus;
+            document.dispatchEvent(new CustomEvent('scoreUpdate', {
+                detail: {
+                    score: this.totalScore,
+                    multiplier: 1.0
+                }
+            }));
             
             // Reset spin tracking
             this.spinTime = 0;
