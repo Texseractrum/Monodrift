@@ -14,6 +14,9 @@ export class GameState {
         this.timeRemaining = this.gameTimeLimit;
         this.isTimerRunning = false;
         
+        // Leaderboard service will be set by the game
+        this.leaderboardService = null;
+        
         // Create custom event for score updates
         this.scoreUpdateEvent = new CustomEvent('scoreUpdate', {
             detail: { score: this.score, multiplier: this.driftMultiplier }
@@ -41,7 +44,7 @@ export class GameState {
             // Apply drift multiplier to points
             this.score += points * this.driftMultiplier;
             
-            // Update high score if needed
+            // Update local high score if needed
             if (this.score > this.highScore) {
                 this.highScore = this.score;
                 this.saveHighScore();
@@ -77,16 +80,41 @@ export class GameState {
                 this.isTimerRunning = false;
                 this.setGameOver();
                 
-                // Dispatch event for game over
-                const gameOverEvent = new CustomEvent('gameOver', {
-                    detail: { 
-                        finalScore: this.score,
-                        highScore: this.highScore
-                    }
-                });
-                document.dispatchEvent(gameOverEvent);
+                // If we have a leaderboard service, refresh it first
+                if (this.leaderboardService) {
+                    // Fetch latest scores before showing game over
+                    this.leaderboardService.fetchLeaderboard()
+                        .then(() => {
+                            this.dispatchGameOverEvent();
+                        })
+                        .catch(error => {
+                            console.error("Failed to fetch leaderboard:", error);
+                            this.dispatchGameOverEvent();
+                        });
+                } else {
+                    this.dispatchGameOverEvent();
+                }
             }
         }
+    }
+    
+    // Separate method to dispatch the game over event
+    dispatchGameOverEvent() {
+        // Get the top score from the leaderboard if available
+        const leaderboardHighScore = this.leaderboardService ? 
+            this.leaderboardService.getTopScore() : 0;
+        
+        // Use the higher of local high score or leaderboard high score
+        const displayHighScore = Math.max(this.highScore, leaderboardHighScore);
+        
+        // Dispatch event for game over
+        const gameOverEvent = new CustomEvent('gameOver', {
+            detail: { 
+                finalScore: this.score,
+                highScore: displayHighScore
+            }
+        });
+        document.dispatchEvent(gameOverEvent);
     }
     
     getFormattedTime() {
@@ -129,6 +157,11 @@ export class GameState {
         if (multiplierChanged) {
             this.notifyScoreUpdate();
         }
+    }
+    
+    // Set the leaderboard service reference
+    setLeaderboardService(service) {
+        this.leaderboardService = service;
     }
     
     loadHighScore() {

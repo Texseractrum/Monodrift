@@ -27,13 +27,26 @@ class Game {
         this.leaderboardService = new LeaderboardService();
         this.leaderboardUI = new LeaderboardUI(this.leaderboardService);
         
+        // Connect leaderboard service to game state
+        this.gameState.setLeaderboardService(this.leaderboardService);
+        
         // Initialize the leaderboard service asynchronously
         // This will handle fetching data with retries.
         // The UI will update via the callback when data arrives.
-        this.leaderboardService.initialize().catch(error => {
-            console.error("Leaderboard initialization failed:", error);
-            // UI will show loading/error state based on the callback
-        });
+        this.leaderboardService.initialize()
+            .then(success => {
+                if (success) {
+                    console.log("Leaderboard initialized successfully");
+                    // Force a refresh to make sure UI gets updated
+                    this.leaderboardUI.refreshLeaderboard();
+                } else {
+                    console.warn("Leaderboard initialization completed with issues");
+                }
+            })
+            .catch(error => {
+                console.error("Leaderboard initialization failed:", error);
+                // UI will show loading/error state based on the callback
+            });
         
         this.setupLighting();
         this.setupModernUI();
@@ -962,14 +975,7 @@ class Game {
         const finalScoreElement = document.createElement('div');
         finalScoreElement.textContent = `FINAL SCORE: ${Math.floor(finalScore)}`;
         finalScoreElement.style.fontSize = '24px';
-        finalScoreElement.style.marginBottom = '10px';
-        
-        // High score
-        const highScoreElement = document.createElement('div');
-        highScoreElement.textContent = `HIGH SCORE: ${Math.floor(highScore)}`;
-        highScoreElement.style.fontSize = '20px';
-        highScoreElement.style.marginBottom = '30px';
-        highScoreElement.style.color = '#aaa';
+        finalScoreElement.style.marginBottom = '30px';
         
         // Restart button
         const restartButton = document.createElement('button');
@@ -994,7 +1000,6 @@ class Game {
         gameOverContainer.appendChild(gameOverTitle);
         gameOverContainer.appendChild(playerNameElement);
         gameOverContainer.appendChild(finalScoreElement);
-        gameOverContainer.appendChild(highScoreElement);
         gameOverContainer.appendChild(restartButton);
         
         // Add to the DOM

@@ -11,12 +11,24 @@ export class LeaderboardUI {
     
     // Bind the update method to this instance
     this.updateLeaderboard = this.updateLeaderboard.bind(this);
+    this.updateMiniLeaderboard = this.updateMiniLeaderboard.bind(this);
     
     // Set the update callback
     this.leaderboardService.onLeaderboardUpdate = this.updateLeaderboard;
     
+    console.log('LeaderboardUI initialized, callback attached');
+    
     // Initialize the mini-leaderboard immediately
     this.initMiniLeaderboard();
+    
+    // Force a refresh to show data if already available
+    setTimeout(() => {
+      const scores = this.leaderboardService.topScores;
+      if (scores && scores.length > 0) {
+        console.log('Using cached scores for initial display:', scores.length);
+        this.updateLeaderboard(scores);
+      }
+    }, 100);
   }
   
   initialize() {
@@ -185,19 +197,19 @@ export class LeaderboardUI {
     header.appendChild(refreshButton);
     
     // Create scores container
-    const scoresContainerElement = document.createElement('div');
-    scoresContainerElement.id = 'mini-scores';
+    const scoresContainer = document.createElement('div');
+    scoresContainer.id = 'mini-scores';
     
     // Assemble mini leaderboard
     this.miniLeaderboardContainer.appendChild(header);
-    this.miniLeaderboardContainer.appendChild(scoresContainerElement);
+    this.miniLeaderboardContainer.appendChild(scoresContainer);
     
     // Add to DOM
     document.body.appendChild(this.miniLeaderboardContainer);
     
     // Initial loading state - data will come via callback
-    if (scoresContainerElement) {
-      scoresContainerElement.innerHTML = '<div style="text-align: center; padding: 10px; color: #aaa;">Loading...</div>';
+    if (scoresContainer) {
+      scoresContainer.innerHTML = '<div style="text-align: center; padding: 10px; color: #aaa;">Loading...</div>';
     }
     
     // Set up periodic refresh (every 30 seconds)
@@ -234,14 +246,14 @@ export class LeaderboardUI {
   }
   
   updateMiniLeaderboard(scores) {
-    const scoresContainerElement = document.getElementById('mini-scores');
-    if (!scoresContainerElement) return;
+    const scoresContainer = document.getElementById('mini-scores');
+    if (!scoresContainer) return;
     
-    scoresContainerElement.innerHTML = ''; // Clear previous state (loading or error)
+    scoresContainer.innerHTML = ''; // Clear previous state (loading or error)
 
-    if (!scores) {
+    if (scores === null) {
         // Handle case where service might have failed initialization
-        scoresContainerElement.innerHTML = `
+        scoresContainer.innerHTML = `
             <div style="text-align: center; padding: 5px; color: #ff5555;">
                 Load Error
                 <div style="font-size: 11px; margin-top: 3px;">Check Console</div>
@@ -262,7 +274,7 @@ export class LeaderboardUI {
         noScoresMsg.style.textAlign = 'center';
         noScoresMsg.style.color = '#aaa';
         noScoresMsg.style.padding = '5px';
-        scoresContainerElement.appendChild(noScoresMsg);
+        scoresContainer.appendChild(noScoresMsg);
     } else {
         topScores.forEach((score, index) => {
             const scoreRow = document.createElement('div');
@@ -292,20 +304,38 @@ export class LeaderboardUI {
             
             scoreRow.appendChild(nameSpan);
             scoreRow.appendChild(scoreSpan);
-            scoresContainerElement.appendChild(scoreRow);
+            scoresContainer.appendChild(scoreRow);
         });
     }
   }
   
   updateLeaderboard(scores) {
-    if (!this.leaderboardElement) return;
+    console.log('updateLeaderboard called with scores:', scores ? scores.length : 'null');
     
     // Update the mini leaderboard
     this.updateMiniLeaderboard(scores);
     
+    if (!this.leaderboardElement) {
+      console.log('Main leaderboard element not initialized yet');
+      return;
+    }
+    
     // Clear existing rows in main leaderboard
     const tbody = this.leaderboardElement.querySelector('tbody');
     tbody.innerHTML = '';
+    
+    if (!scores || scores.length === 0) {
+      // If no scores yet, show message
+      const row = document.createElement('tr');
+      const cell = document.createElement('td');
+      cell.colSpan = 4;
+      cell.textContent = 'No scores yet. Be the first!';
+      cell.style.padding = '20px';
+      cell.style.textAlign = 'center';
+      row.appendChild(cell);
+      tbody.appendChild(row);
+      return;
+    }
     
     // Add new rows
     scores.forEach((score, index) => {
@@ -349,18 +379,6 @@ export class LeaderboardUI {
       
       tbody.appendChild(row);
     });
-    
-    // If no scores yet, show message
-    if (scores.length === 0) {
-      const row = document.createElement('tr');
-      const cell = document.createElement('td');
-      cell.colSpan = 4;
-      cell.textContent = 'No scores yet. Be the first!';
-      cell.style.padding = '20px';
-      cell.style.textAlign = 'center';
-      row.appendChild(cell);
-      tbody.appendChild(row);
-    }
   }
   
   startPeriodicRefresh(interval = 30000) {
@@ -377,21 +395,25 @@ export class LeaderboardUI {
   }
   
   refreshLeaderboard(isInitialLoad = false) {
-    const scoresContainerElement = document.getElementById('mini-scores');
-    if (scoresContainerElement && !isInitialLoad) {
-      scoresContainerElement.innerHTML = '<div style="text-align: center; padding: 10px; color: #aaa;">Loading...</div>';
+    console.log('Refreshing leaderboard, isInitialLoad:', isInitialLoad);
+    
+    const scoresContainer = document.getElementById('mini-scores');
+    if (scoresContainer && !isInitialLoad) {
+      scoresContainer.innerHTML = '<div style="text-align: center; padding: 10px; color: #aaa;">Loading...</div>';
     }
     
     // Fetch new data
     return this.leaderboardService.fetchLeaderboard()
       .then(data => {
         console.log("Leaderboard refreshed, entries:", data.length);
+        // Force update UI in case callback didn't work
+        this.updateLeaderboard(data);
         return data;
       })
       .catch(err => {
         console.error("Failed to refresh leaderboard:", err);
-        if (scoresContainerElement) {
-          scoresContainerElement.innerHTML = '<div style="text-align: center; padding: 10px; color: #f55;">Error loading data</div>';
+        if (scoresContainer) {
+          scoresContainer.innerHTML = '<div style="text-align: center; padding: 10px; color: #f55;">Error loading data</div>';
         }
         throw err;
       });

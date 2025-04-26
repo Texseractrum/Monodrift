@@ -753,6 +753,64 @@ export class Car {
         // Clean up any nitro effects
         this.isNitroActive = false;
         this.cleanupNitroParticles();
+        
+        // Subtract points for death
+        if (this.gameState) {
+            const deathPenalty = -35;
+            this.gameState.addScore(deathPenalty);
+            console.log(`Death penalty applied: ${deathPenalty} points, Total: ${this.gameState.score}`);
+            
+            // Update total score for events
+            this.totalScore += deathPenalty;
+            
+            // Dispatch a score update event
+            document.dispatchEvent(new CustomEvent('scoreUpdate', {
+                detail: {
+                    score: this.totalScore,
+                    multiplier: 1.0
+                }
+            }));
+            
+            // Show death penalty message
+            this.showDeathPenaltyMessage(Math.abs(deathPenalty));
+        }
+    }
+    
+    // Show death penalty message
+    showDeathPenaltyMessage(penalty) {
+        // Create a div for the death penalty message
+        const penaltyElement = document.createElement('div');
+        penaltyElement.textContent = `-${penalty} POINTS`;
+        penaltyElement.style.position = 'absolute';
+        penaltyElement.style.top = '30%';
+        penaltyElement.style.left = '50%';
+        penaltyElement.style.transform = 'translate(-50%, -50%)';
+        penaltyElement.style.color = '#ff3333';
+        penaltyElement.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+        penaltyElement.style.padding = '10px 20px';
+        penaltyElement.style.borderRadius = '5px';
+        penaltyElement.style.fontFamily = 'Arial, sans-serif';
+        penaltyElement.style.fontSize = '28px';
+        penaltyElement.style.fontWeight = 'bold';
+        penaltyElement.style.zIndex = '1001';
+        penaltyElement.style.transition = 'transform 0.5s, opacity 0.5s';
+        penaltyElement.style.opacity = '0';
+        
+        document.body.appendChild(penaltyElement);
+        
+        // Animate in
+        setTimeout(() => {
+            penaltyElement.style.opacity = '1';
+            penaltyElement.style.transform = 'translate(-50%, -100%)';
+        }, 50);
+        
+        // Remove after animation
+        setTimeout(() => {
+            penaltyElement.style.opacity = '0';
+            setTimeout(() => {
+                document.body.removeChild(penaltyElement);
+            }, 500);
+        }, 1500);
     }
     
     // Show recovery message
