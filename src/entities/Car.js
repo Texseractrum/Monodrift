@@ -167,135 +167,40 @@ export class Car {
     }
     
     loadCustomModel() {
-        console.log('Beginning to load car model...');
-        
-        // Create a loader for GLTF models
+        console.log('Attempting to load car model from: /models/car.glb');
         const loader = new GLTFLoader();
-        
-        // Load the model
         loader.load(
-            // Path to your model file - use relative path for Netlify compatibility
-            './models/car.glb',
-            
-            // Called when the model is loaded
+            '/models/car.glb',
             (gltf) => {
-                console.log('Model loaded successfully');
+                console.log('Car model loaded successfully:', gltf);
+                this.car = gltf.scene;
                 
-                // Log model information
-                console.log('Model structure:', JSON.stringify({
-                    animations: gltf.animations ? gltf.animations.length : 0,
-                    scenes: gltf.scenes ? gltf.scenes.length : 0,
-                    cameras: gltf.cameras ? gltf.cameras.length : 0,
-                    hasScene: !!gltf.scene
-                }));
+                // Scale and rotate the car model
+                this.car.scale.set(0.4, 0.4, 0.4);
+                this.car.rotation.y = Math.PI;
                 
-                // Remove placeholder
+                // Add the car model to our mesh group for proper positioning
+                this.mesh.add(this.car);
+                
+                // Create exhaust effects for the model
+                this.createExhaustFlamesForModel(this.car);
+                
+                // Remove placeholder if it exists
                 if (this.placeholder) {
                     this.mesh.remove(this.placeholder);
                     this.placeholder.geometry.dispose();
                     this.placeholder.material.dispose();
                     this.placeholder = null;
-                    console.log('Placeholder removed');
                 }
-                
-                // Get the model from the loaded GLTF
-                const model = gltf.scene;
-                
-                // Count meshes and materials for debugging
-                let meshCount = 0;
-                let materialCount = 0;
-                
-                // Make sure the model casts and receives shadows
-                model.traverse((node) => {
-                    if (node.isMesh) {
-                        meshCount++;
-                        node.castShadow = true;
-                        node.receiveShadow = true;
-                        
-                        // Look for tail lights to use as brake lights
-                        if (node.name && (
-                            node.name.toLowerCase().includes('tail') || 
-                            node.name.toLowerCase().includes('brake') || 
-                            node.name.toLowerCase().includes('light')
-                        )) {
-                            // This could be a tail light - save reference for brake lights
-                            this.brakeLights.push(node);
-                            
-                            // Create materials if needed
-                            if (node.material) {
-                                // Clone the material to avoid affecting other parts
-                                if (!node.material._isCloned) {
-                                    node.material = node.material.clone();
-                                    node.material._isCloned = true;
-                                }
-                                
-                                // Store original colors for toggling
-                                node.material._originalColor = node.material.color.clone();
-                                node.material._originalEmissive = node.material.emissive ? 
-                                    node.material.emissive.clone() : new THREE.Color(0x000000);
-                            }
-                        }
-                        
-                        // KEEP ORIGINAL MATERIALS (don't make white)
-                        if (node.material) {
-                            materialCount++;
-                            // Don't modify material colors to keep original appearance
-                            // Just ensure they're visible with proper rendering settings
-                            if (Array.isArray(node.material)) {
-                                node.material.forEach(mat => {
-                                    if (mat.transparent) {
-                                        mat.opacity = 1.0; // Make sure opacity is set
-                                    }
-                                });
-                            } else {
-                                if (node.material.transparent) {
-                                    node.material.opacity = 1.0;
-                                }
-                            }
-                        }
-                    }
-                });
-                
-                console.log(`Model has ${meshCount} meshes and ${materialCount} materials`);
-                
-                // Further adjusted for Apollo IE model 
-                model.scale.set(1, 1, 1); // Larger scale for better visibility
-                model.position.set(0, 0, 0);    // Higher off the ground
-                model.rotation.y = Math.PI;       // Rotate to face forward
-                
-                // Add the model to our car mesh group
-                this.mesh.add(model);
-                
-                // Create exhausts if needed
-                if (this.exhaustFlames.length === 0) {
-                    this.createExhaustFlamesForModel(model);
-                }
-                
-                // Store model reference
-                this.carModel = model;
-                
-                console.log('Car model added to scene with position:', 
-                    model.position.x, model.position.y, model.position.z);
-                console.log('Car model scale:', 
-                    model.scale.x, model.scale.y, model.scale.z);
-                console.log('Found', this.brakeLights.length, 'potential brake lights');
             },
-            
-            // Called while loading is progressing
             (xhr) => {
-                const progress = (xhr.loaded / xhr.total) * 100;
-                console.log('Loading model: ' + progress.toFixed(2) + '%');
+                console.log(`${(xhr.loaded / xhr.total) * 100}% loaded`);
             },
-            
-            // Called when there's an error
             (error) => {
-                console.error('Error loading model:', error);
+                console.error('Error loading car model:', error);
                 console.error('Error details:', error.message);
-                
-                // If model fails to load, ensure we have exhaust flames
-                this.createExhaustFlamesPlaceholder();
-                
-                // Keep the placeholder if the model fails to load
+                // Create placeholder if model fails to load
+                this.createPlaceholder();
             }
         );
     }
@@ -736,9 +641,9 @@ export class Car {
             const originalColor = this.placeholder.material.color.clone();
             this.originalColors.push({ mesh: this.placeholder, color: originalColor });
             this.placeholder.material.color.set(0xff0000); // Flash red
-        } else if (this.carModel) {
+        } else if (this.car) {
             // Flash the custom model materials
-            this.carModel.traverse((node) => {
+            this.car.traverse((node) => {
                 if (node.isMesh && node.material) {
                     const originalColor = node.material.color.clone();
                     this.originalColors.push({ mesh: node, color: originalColor });

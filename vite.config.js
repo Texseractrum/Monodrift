@@ -2,7 +2,22 @@ import { defineConfig } from 'vite';
 
 export default defineConfig({
   server: {
-    port: 3000
+    port: 3000,
+    fs: {
+      // Allow serving files from one level up
+      allow: ['..']
+    },
+    // Configure MIME types for GLB files
+    middlewareMode: true,
+    configureServer: (server) => {
+      server.middlewares.use((req, res, next) => {
+        // Set correct MIME type for GLB files
+        if (req.url.endsWith('.glb')) {
+          res.setHeader('Content-Type', 'model/gltf-binary');
+        }
+        next();
+      });
+    }
   },
   build: {
     outDir: 'dist',

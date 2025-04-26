@@ -11,6 +11,16 @@
   [headers.values]
     Content-Type = "model/gltf-binary"
     Content-Disposition = "inline"
+    X-Content-Type-Options = "nosniff"
+    Cache-Control = "public, max-age=31536000"
+
+# More specific path-based header for GLB files
+[[headers]]
+  for = "/models/*.glb"
+  [headers.values]
+    Content-Type = "model/gltf-binary"
+    Content-Disposition = "inline"
+    X-Content-Type-Options = "nosniff"
 
 # Don't process binary files
 [build.processing]
