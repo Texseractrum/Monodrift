@@ -15,6 +15,10 @@ class Game {
         // Set background color to dark gray instead of pure black
         this.scene.background = new THREE.Color(0x111111);
         
+        // Detect if we're on mobile for camera adjustments
+        this.isMobileDevice = this.detectMobileDevice();
+        console.log("Mobile device detected:", this.isMobileDevice);
+        
         this.camera = this.setupCamera();
         this.renderer = this.setupRenderer();
         this.controls = this.setupControls();
@@ -81,6 +85,11 @@ class Game {
         this.regularCameraDistance = 12; // Normal camera distance
         this.spinTransitionSpeed = 0.1; // How quickly to transition to spin camera
         
+        // For mobile frame rate control
+        this.lastFrameTime = 0;
+        this.targetFPS = this.isMobileDevice ? 30 : 60; // Lower target FPS on mobile
+        this.frameInterval = 1000 / this.targetFPS;
+        
         this.setupEventListeners();
         
         // Debug axes helper
@@ -121,15 +130,23 @@ class Game {
     
     setupRenderer() {
         const renderer = new THREE.WebGLRenderer({ 
-            antialias: true,
+            antialias: !this.isMobileDevice, // Disable antialiasing on mobile for better performance
             alpha: true 
         });
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.setClearColor(0x000000);
         
-        // Enable shadows
+        // Enable shadows with appropriate settings for device type
         renderer.shadowMap.enabled = true;
-        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        
+        // Use simpler shadow map type on mobile for better performance
+        if (this.isMobileDevice) {
+            renderer.shadowMap.type = THREE.BasicShadowMap;
+            // Reduce shadow map size on mobile
+            renderer.shadowMapSize = 1024;
+        } else {
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        }
         
         document.body.appendChild(renderer.domElement);
         return renderer;
@@ -598,49 +615,74 @@ class Game {
         const significantSpeed = Math.abs(this.car.velocity) > 2;
         const useDirection = significantSpeed ? carVelocity : carForward;
         
-        // Smooth blending direction when turning
-        // This means camera will lag slightly behind car when turning - a cinematic effect
-        if (!this.lastDirection) {
-            this.lastDirection = useDirection.clone();
-        } else {
-            // Adjust smoothness based on spin state
-            let turnSmoothness;
-            
-            if (isSpinning) {
-                // During spins, make camera follow more loosely
-                turnSmoothness = 0.97;
+        // Use simpler camera logic for mobile
+        if (this.isMobileDevice) {
+            // Less smoothing on mobile for more responsive feel
+            if (!this.lastDirection) {
+                this.lastDirection = useDirection.clone();
             } else {
-                // Normal smoothness calculation
-                turnSmoothness = 0.92 - (Math.abs(this.car.velocity) / this.car.maxSpeed) * 0.3;
+                // More direct camera following for mobile
+                const mobileTurnSmoothness = isSpinning ? 0.8 : 0.7;
+                this.lastDirection.lerp(useDirection, 1 - mobileTurnSmoothness);
+                this.lastDirection.normalize();
             }
-            
-            this.lastDirection.lerp(useDirection, 1 - turnSmoothness);
-            this.lastDirection.normalize();
+        } else {
+            // Desktop smoothing
+            if (!this.lastDirection) {
+                this.lastDirection = useDirection.clone();
+            } else {
+                // Adjust smoothness based on spin state
+                let turnSmoothness;
+                
+                if (isSpinning) {
+                    // During spins, make camera follow more loosely
+                    turnSmoothness = 0.97;
+                } else {
+                    // Normal smoothness calculation
+                    turnSmoothness = 0.92 - (Math.abs(this.car.velocity) / this.car.maxSpeed) * 0.3;
+                }
+                
+                this.lastDirection.lerp(useDirection, 1 - turnSmoothness);
+                this.lastDirection.normalize();
+            }
         }
         
         // Use the smoothed direction for camera positioning
         const direction = this.lastDirection.clone();
         
-        // Adjust camera height and distance based on spin state
-        const targetHeight = isSpinning 
-            ? this.spinCameraHeight + (spinRate * 0.5) // Higher camera during intense spins
-            : this.regularCameraHeight;
+        // Use different camera settings for mobile
+        let targetHeight, targetDistance;
         
-        const targetDistance = isSpinning
-            ? this.spinCameraDistance + (spinRate * 0.8) // Further back during intense spins
-            : this.regularCameraDistance;
+        if (this.isMobileDevice) {
+            // Higher camera position for better visibility on small screens
+            targetHeight = isSpinning ? 10 : 9;
+            targetDistance = isSpinning ? 15 : 13;
+        } else {
+            // Standard desktop settings
+            targetHeight = isSpinning 
+                ? this.spinCameraHeight + (spinRate * 0.5) // Higher camera during intense spins
+                : this.regularCameraHeight;
+            
+            targetDistance = isSpinning
+                ? this.spinCameraDistance + (spinRate * 0.8) // Further back during intense spins
+                : this.regularCameraDistance;
+        }
         
         // Smoothly transition camera parameters
+        // Less smoothing on mobile for faster response
+        const heightLerpFactor = this.isMobileDevice ? 0.2 : 0.05;
+        const distanceLerpFactor = this.isMobileDevice ? 0.2 : (isSpinning ? this.spinTransitionSpeed : 0.05);
+        
         this.cameraOffset.y = THREE.MathUtils.lerp(
             this.cameraOffset.y, 
             targetHeight, 
-            isSpinning ? this.spinTransitionSpeed : 0.05
+            heightLerpFactor
         );
         
         this.cameraOffset.z = THREE.MathUtils.lerp(
             this.cameraOffset.z, 
             targetDistance, 
-            isSpinning ? this.spinTransitionSpeed : 0.05
+            distanceLerpFactor
         );
         
         // Position camera behind car based on direction
@@ -663,8 +705,8 @@ class Game {
         );
         
         // Apply a tilt effect during drifting - slight camera roll
-        // Reduce tilt during spins to avoid disorientation
-        const tiltFactor = isSpinning ? 0.05 : 0.15;
+        // Reduced tilt on mobile to avoid disorientation
+        const tiltFactor = this.isMobileDevice ? 0.05 : (isSpinning ? 0.05 : 0.15);
         const driftTilt = this.car.isDrifting ? (this.car.steeringAngle * tiltFactor) : 0;
         
         if (resetPosition) {
@@ -672,10 +714,9 @@ class Game {
             this.camera.position.copy(this.targetCameraPosition);
             this.camera.rotation.z = driftTilt;
         } else {
-            // Adjust camera lerp factor based on spin state
-            const positionLerpFactor = isSpinning 
-                ? Math.max(0.02, this.cameraLerpFactor * 0.5) // Slower follow during spins
-                : this.cameraLerpFactor;
+            // Use faster position lerp on mobile for more responsive feel
+            const positionLerpFactor = this.isMobileDevice ? 0.2 : 
+                (isSpinning ? Math.max(0.02, this.cameraLerpFactor * 0.5) : this.cameraLerpFactor);
                 
             // Smoothly lerp camera position
             this.camera.position.lerp(this.targetCameraPosition, positionLerpFactor);
@@ -683,8 +724,11 @@ class Game {
         }
         
         // Look at position (slightly ahead of car)
-        // During spins, look more directly at car to maintain focus
-        const lookAheadDistance = isSpinning ? 2 : 10;
+        // Mobile needs less look-ahead for tighter control feel
+        const lookAheadDistance = this.isMobileDevice ? 
+            (isSpinning ? 1 : 5) : 
+            (isSpinning ? 2 : 10);
+        
         const lookAtOffset = direction.clone().multiplyScalar(lookAheadDistance);
         this.targetLookAt.copy(this.car.mesh.position).add(lookAtOffset);
         this.targetLookAt.y = this.car.mesh.position.y + 1; // Look slightly above car
@@ -693,10 +737,9 @@ class Game {
         if (resetPosition) {
             this.camera.lookAt(this.targetLookAt);
         } else {
-            // Adjust look-at lerp factor based on spin state
-            const lookAtLerpFactor = isSpinning
-                ? Math.max(0.05, this.lookAtLerpFactor * 0.7) // Slower look-at during spins
-                : this.lookAtLerpFactor;
+            // More direct look-at on mobile
+            const lookAtLerpFactor = this.isMobileDevice ? 0.3 :
+                (isSpinning ? Math.max(0.05, this.lookAtLerpFactor * 0.7) : this.lookAtLerpFactor);
                 
             // We need to manually lerp the lookAt since camera.lookAt doesn't support lerping
             const currentLookAt = new THREE.Vector3();
@@ -724,10 +767,28 @@ class Game {
     animate(currentTime = 0) {
         requestAnimationFrame(this.animate.bind(this));
         
+        // Skip frames on mobile to maintain target FPS
+        if (this.isMobileDevice) {
+            // Convert to milliseconds for comparison
+            const timeMs = currentTime;
+            const elapsed = timeMs - this.lastFrameTime;
+            
+            // If not enough time has passed for our target frame rate, skip this frame
+            if (elapsed < this.frameInterval) {
+                return;
+            }
+            
+            // Otherwise, update last frame time (with rounding to avoid drift)
+            this.lastFrameTime = timeMs - (elapsed % this.frameInterval);
+        }
+        
         const deltaTime = (currentTime - this.lastTime) / 1000;
         this.lastTime = currentTime;
         
-        if (this.isRunning && deltaTime < 0.2) { // Skip big jumps in time
+        // Skip large time jumps (like when tab was inactive)
+        if (deltaTime > 0.2) return;
+        
+        if (this.isRunning) {
             // Update game state and timer
             this.gameState.updateTimer(deltaTime);
             this.inputHandler.update();
@@ -1033,6 +1094,12 @@ class Game {
         setTimeout(() => {
             document.body.removeChild(goContainer);
         }, 1000);
+    }
+    
+    // Detect mobile device
+    detectMobileDevice() {
+        return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
+               (window.innerWidth <= 800 && window.innerHeight <= 800);
     }
 }
 
