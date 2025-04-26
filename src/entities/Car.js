@@ -176,8 +176,11 @@ export class Car {
                 this.car = gltf.scene;
                 
                 // Scale and rotate the car model
-                this.car.scale.set(0.4, 0.4, 0.4);
-                this.car.rotation.y = Math.PI;
+                this.car.scale.set(0.01, 0.01, 0.01);
+                this.car.rotation.y = Math.PI/2;
+                
+                // Position adjustment - lift the car up
+                this.car.position.y = 0.5; // Lift the car 0.5 units up
                 
                 // Add the car model to our mesh group for proper positioning
                 this.mesh.add(this.car);

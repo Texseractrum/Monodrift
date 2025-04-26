@@ -2,7 +2,11 @@ import { defineConfig } from 'vite';
 
 export default defineConfig({
   server: {
-    port: 3000,
+    port: 5173,
+    strictPort: false, // Allow fallback to next available port
+    hmr: {
+      port: 5174 // Separate WebSocket port
+    },
     fs: {
       // Allow serving files from one level up
       allow: ['..']
